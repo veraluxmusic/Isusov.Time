@@ -1,0 +1,10 @@
+{
+    "name": "Isusov.Time.Editor",
+    "references": [
+      "Isusov.Time"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": []
+}

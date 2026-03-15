@@ -1,0 +1,14 @@
+{
+    "name": "Isusov.Time.Editor.Tests",
+    "references": [
+        "Isusov.Time.Editor",
+        "Isusov.Time"
+    ],
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": []
+}

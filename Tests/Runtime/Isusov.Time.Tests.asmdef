@@ -1,0 +1,11 @@
+{
+    "name": "Isusov.Time.Tests",
+    "references": [
+        "Isusov.Time"
+    ],
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": []
+}
