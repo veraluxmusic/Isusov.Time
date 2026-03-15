@@ -26,7 +26,7 @@ namespace Isusov.Time.Gameplay
     public sealed class SeasonalGameplayModifier
     {
         [SerializeField] private string key = string.Empty;
-        [SerializeField] private SeasonalValueModifier modifier = new SeasonalValueModifier();
+        [SerializeField] private SeasonalValueModifier modifier = new();
 
         /// <summary>
         /// Initializes a new instance of the <see cref="SeasonalGameplayModifier"/> class.

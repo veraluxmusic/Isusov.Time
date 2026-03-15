@@ -1,0 +1,99 @@
+name: Validate Package
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate package structure and metadata
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Validate package.json
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -f package.json || { echo "package.json is missing"; exit 1; }
+
+          jq empty package.json
+
+          NAME="$(jq -r '.name // empty' package.json)"
+          VERSION="$(jq -r '.version // empty' package.json)"
+          DISPLAY_NAME="$(jq -r '.displayName // empty' package.json)"
+          DESCRIPTION="$(jq -r '.description // empty' package.json)"
+          UNITY="$(jq -r '.unity // empty' package.json)"
+          UNITY_RELEASE="$(jq -r '.unityRelease // empty' package.json)"
+          LICENSE="$(jq -r '.license // empty' package.json)"
+          DOC_URL="$(jq -r '.documentationUrl // empty' package.json)"
+          CHANGELOG_URL="$(jq -r '.changelogUrl // empty' package.json)"
+          LICENSES_URL="$(jq -r '.licensesUrl // empty' package.json)"
+
+          [[ -n "$NAME" ]] || { echo "package.json: name is required"; exit 1; }
+          [[ "$NAME" =~ ^com\.[a-z0-9][a-z0-9\.\-]*$ ]] || { echo "package.json: name must look like a valid UPM package id"; exit 1; }
+
+          [[ -n "$VERSION" ]] || { echo "package.json: version is required"; exit 1; }
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([\-+][A-Za-z0-9\.\-]+)?$ ]] || { echo "package.json: version must be semver-like"; exit 1; }
+
+          [[ -n "$DISPLAY_NAME" ]] || { echo "package.json: displayName is required"; exit 1; }
+          [[ -n "$DESCRIPTION" ]] || { echo "package.json: description is required"; exit 1; }
+
+          [[ "$UNITY" == "6000.5" ]] || { echo "package.json: unity must be 6000.5"; exit 1; }
+          [[ "$UNITY_RELEASE" == "0a8" ]] || { echo "package.json: unityRelease must be 0a8"; exit 1; }
+
+          [[ "$LICENSE" == "MIT" ]] || { echo "package.json: license should be MIT"; exit 1; }
+
+          [[ "$DOC_URL" =~ ^https://github\.com/.+/.+#readme$ ]] || { echo "package.json: documentationUrl should point to the repository README"; exit 1; }
+          [[ "$CHANGELOG_URL" =~ ^https://github\.com/.+/.+/blob/.+/CHANGELOG\.md$ ]] || { echo "package.json: changelogUrl should point to CHANGELOG.md"; exit 1; }
+          [[ "$LICENSES_URL" =~ ^https://github\.com/.+/.+/blob/.+/LICENSE.*$ ]] || { echo "package.json: licensesUrl should point to LICENSE"; exit 1; }
+
+      - name: Validate required repository files
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -f README.md || { echo "README.md is missing"; exit 1; }
+          test -f CHANGELOG.md || { echo "CHANGELOG.md is missing"; exit 1; }
+          test -f LICENSE || { echo "LICENSE is missing"; exit 1; }
+
+      - name: Validate Unity package layout
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -d Runtime || { echo "Runtime/ directory is missing"; exit 1; }
+
+          if [ -d Editor ]; then
+            echo "Editor/ found"
+          else
+            echo "Editor/ not present — allowed"
+          fi
+
+          if [ -d Tests ]; then
+            echo "Tests/ found"
+          else
+            echo "Tests/ not present — allowed for now"
+          fi
+
+      - name: Validate README references
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          grep -qi "installation" README.md || { echo "README.md should include an Installation section"; exit 1; }
+          grep -qi "quick start" README.md || { echo "README.md should include a Quick Start section"; exit 1; }
+
+      - name: Summary
+        shell: bash
+        run: |
+          echo "Package structure and metadata validation passed."

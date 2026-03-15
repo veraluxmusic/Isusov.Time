@@ -1,5 +1,4 @@
 using Isusov.Time.Calendar;
-using Isusov.Time.Config;
 using Isusov.Time.Core;
 using Isusov.Time.Seasons;
 using System;

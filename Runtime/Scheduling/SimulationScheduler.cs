@@ -1,7 +1,6 @@
-using Isusov.Time.Config;
+using Isusov.Time.Core;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace Isusov.Time.Scheduling
 {
@@ -71,7 +70,7 @@ namespace Isusov.Time.Scheduling
 
             if (!scheduledByTick.TryGetValue(targetTick.Value, out var bucket))
             {
-                bucket = new List<ScheduledEntry>();
+                bucket = new();
                 scheduledByTick.Add(targetTick.Value, bucket);
             }
 
@@ -120,15 +119,26 @@ namespace Isusov.Time.Scheduling
                 return false;
             }
 
-            bucket.RemoveAll(entry => entry.Handle.Id == handle.Id);
-
-            if (bucket.Count == 0)
+            for (var i = 0; i < bucket.Count; i++)
             {
-                scheduledByTick.Remove(targetTick);
+                if (bucket[i].Handle.Id != handle.Id)
+                {
+                    continue;
+                }
+
+                bucket.RemoveAt(i);
+
+                if (bucket.Count == 0)
+                {
+                    scheduledByTick.Remove(targetTick);
+                }
+
+                handleToTick.Remove(handle.Id);
+                return true;
             }
 
             handleToTick.Remove(handle.Id);
-            return true;
+            return false;
         }
 
         /// <summary>
@@ -151,7 +161,13 @@ namespace Isusov.Time.Scheduling
 
             while (scheduledByTick.Count > 0)
             {
-                var firstPair = scheduledByTick.First();
+                var enumerator = scheduledByTick.GetEnumerator();
+                if (!enumerator.MoveNext())
+                {
+                    break;
+                }
+
+                var firstPair = enumerator.Current;
                 if (firstPair.Key > currentTick.Value)
                 {
                     break;
@@ -159,8 +175,9 @@ namespace Isusov.Time.Scheduling
 
                 scheduledByTick.Remove(firstPair.Key);
 
-                foreach (var entry in firstPair.Value)
+                for (var i = 0; i < firstPair.Value.Count; i++)
                 {
+                    var entry = firstPair.Value[i];
                     handleToTick.Remove(entry.Handle.Id);
                     entry.Callback.Invoke();
                     executedCount++;

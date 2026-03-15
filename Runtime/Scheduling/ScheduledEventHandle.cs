@@ -1,4 +1,4 @@
-using Isusov.Time.Config;
+using Isusov.Time.Core;
 using System;
 using UnityEngine;
 
@@ -15,6 +15,10 @@ namespace Isusov.Time.Scheduling
     /// <para>
     /// The handle contains a stable scheduler-generated identifier and the target tick the event was scheduled for.
     /// Equality is based on the identifier, not the target tick.
+    /// </para>
+    /// <para>
+    /// This struct is intentionally not marked <c>readonly</c> so Unity can reliably serialize its backing
+    /// fields in authored assets and snapshots while consumers still interact through readonly accessors.
     /// </para>
     /// </remarks>
     [Serializable]

@@ -1,7 +1,6 @@
 using Isusov.Time.Calendar;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 
 namespace Isusov.Time.Seasons
@@ -99,21 +98,26 @@ namespace Isusov.Time.Seasons
 
             ValidateOrThrow(calendarDefinition);
 
-            return definitions
-                .OrderBy(definition => definition.GetStartDayOfYear(calendarDefinition, year))
-                .ToArray();
+            var orderedDefinitions = definitions.ToArray();
+            Array.Sort(
+                orderedDefinitions,
+                (left, right) => left.GetStartDayOfYear(calendarDefinition, year).CompareTo(right.GetStartDayOfYear(calendarDefinition, year)));
+
+            return orderedDefinitions;
         }
 
         private void ValidateUniqueBoundaries(CalendarDefinition calendarDefinition, int year)
         {
-            var duplicateBoundary = definitions
-                .GroupBy(definition => definition.GetStartDayOfYear(calendarDefinition, year))
-                .FirstOrDefault(group => group.Count() > 1);
+            var seenBoundaries = new HashSet<int>();
 
-            if (duplicateBoundary != null)
+            for (var i = 0; i < definitions.Count; i++)
             {
-                throw new InvalidOperationException(
-                    $"SeasonProfile contains multiple season definitions that resolve to the same boundary in year {year}.");
+                var boundary = definitions[i].GetStartDayOfYear(calendarDefinition, year);
+                if (!seenBoundaries.Add(boundary))
+                {
+                    throw new InvalidOperationException(
+                        $"SeasonProfile contains multiple season definitions that resolve to the same boundary in year {year}.");
+                }
             }
         }
 

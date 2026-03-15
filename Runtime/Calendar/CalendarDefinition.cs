@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 
 namespace Isusov.Time.Calendar
@@ -21,6 +20,8 @@ namespace Isusov.Time.Calendar
         [SerializeField] private int leapYearInterval = 4;
         [SerializeField] private int leapYearMonthIndex = 2;
         [SerializeField] private int leapYearDayDelta = 1;
+
+        private int cachedDaysPerCommonYear = -1;
 
         /// <summary>
         /// Gets the calendar identifier used for authoring, diagnostics, and persistence metadata.
@@ -60,7 +61,29 @@ namespace Isusov.Time.Calendar
         /// <summary>
         /// Gets the total number of days in a non-leap year.
         /// </summary>
-        public int DaysPerCommonYear => months?.Sum(month => month.Days) ?? 0;
+        public int DaysPerCommonYear
+        {
+            get
+            {
+                if (cachedDaysPerCommonYear >= 0)
+                {
+                    return cachedDaysPerCommonYear;
+                }
+
+                if (months == null)
+                {
+                    return 0;
+                }
+
+                var totalDays = 0;
+                for (var i = 0; i < months.Count; i++)
+                {
+                    totalDays += months[i].Days;
+                }
+
+                return totalDays;
+            }
+        }
 
         /// <summary>
         /// Creates the default Gregorian calendar definition.
@@ -117,6 +140,14 @@ namespace Isusov.Time.Calendar
                     throw new InvalidOperationException("CalendarDefinition.LeapYearMonthIndex is outside the valid month range.");
                 }
             }
+
+            var totalDays = 0;
+            for (var i = 0; i < months.Count; i++)
+            {
+                totalDays += months[i].Days;
+            }
+
+            cachedDaysPerCommonYear = totalDays;
         }
 
         /// <summary>
@@ -156,24 +187,10 @@ namespace Isusov.Time.Calendar
         public int GetDaysInMonth(int monthIndex, int year)
         {
             ValidateOrThrow();
+            ValidateMonthIndex(monthIndex);
+            ValidateYear(year);
 
-            if (monthIndex <= 0 || monthIndex > months.Count)
-            {
-                throw new ArgumentOutOfRangeException(nameof(monthIndex), monthIndex, "Month index is outside the calendar range.");
-            }
-
-            if (year <= 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(year), year, "Year must be greater than zero.");
-            }
-
-            var monthDays = months[monthIndex - 1].Days;
-            if (leapYearDayDelta > 0 && monthIndex == leapYearMonthIndex && IsLeapYear(year))
-            {
-                monthDays += leapYearDayDelta;
-            }
-
-            return monthDays;
+            return GetDaysInMonthValidated(monthIndex, year);
         }
 
         /// <summary>
@@ -186,19 +203,9 @@ namespace Isusov.Time.Calendar
         public int GetMaximumDaysInMonth(int monthIndex)
         {
             ValidateOrThrow();
+            ValidateMonthIndex(monthIndex);
 
-            if (monthIndex <= 0 || monthIndex > months.Count)
-            {
-                throw new ArgumentOutOfRangeException(nameof(monthIndex), monthIndex, "Month index is outside the calendar range.");
-            }
-
-            var commonDays = months[monthIndex - 1].Days;
-            if (leapYearDayDelta > 0 && monthIndex == leapYearMonthIndex)
-            {
-                return commonDays + leapYearDayDelta;
-            }
-
-            return commonDays;
+            return GetMaximumDaysInMonthValidated(monthIndex);
         }
 
         /// <summary>
@@ -210,14 +217,9 @@ namespace Isusov.Time.Calendar
         public int GetDaysInYear(int year)
         {
             ValidateOrThrow();
+            ValidateYear(year);
 
-            var days = DaysPerCommonYear;
-            if (leapYearDayDelta > 0 && IsLeapYear(year))
-            {
-                days += leapYearDayDelta;
-            }
-
-            return days;
+            return GetDaysInYearValidated(year);
         }
 
         /// <summary>
@@ -231,28 +233,7 @@ namespace Isusov.Time.Calendar
             try
             {
                 ValidateOrThrow();
-
-                if (date.Year <= 0)
-                {
-                    error = "GameDate.Year must be greater than zero.";
-                    return false;
-                }
-
-                if (date.MonthIndex <= 0 || date.MonthIndex > months.Count)
-                {
-                    error = "GameDate.MonthIndex is outside the valid calendar range.";
-                    return false;
-                }
-
-                var maxDay = GetDaysInMonth(date.MonthIndex, date.Year);
-                if (date.Day <= 0 || date.Day > maxDay)
-                {
-                    error = $"GameDate.Day must be between 1 and {maxDay} for {date.Year:D4}-{date.MonthIndex:D2}.";
-                    return false;
-                }
-
-                error = null;
-                return true;
+                return TryValidateGameDateValidated(date, out error);
             }
             catch (Exception exception)
             {
@@ -282,12 +263,13 @@ namespace Isusov.Time.Calendar
         /// <exception cref="ArgumentException">Thrown when <paramref name="date"/> is not valid for this calendar.</exception>
         public int GetDayOfYear(GameDate date)
         {
-            EnsureValidGameDate(date);
+            ValidateOrThrow();
+            EnsureValidGameDateValidated(date);
 
             var dayOfYear = 0;
             for (var month = 1; month < date.MonthIndex; month++)
             {
-                dayOfYear += GetDaysInMonth(month, date.Year);
+                dayOfYear += GetDaysInMonthValidated(month, date.Year);
             }
 
             dayOfYear += date.Day;
@@ -305,30 +287,10 @@ namespace Isusov.Time.Calendar
         /// </exception>
         public GameDate GetDateFromDayOfYear(int year, int dayOfYear)
         {
-            if (year <= 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(year), year, "Year must be greater than zero.");
-            }
+            ValidateOrThrow();
+            ValidateYear(year);
 
-            var daysInYear = GetDaysInYear(year);
-            if (dayOfYear <= 0 || dayOfYear > daysInYear)
-            {
-                throw new ArgumentOutOfRangeException(nameof(dayOfYear), dayOfYear, $"Day of year must be between 1 and {daysInYear}.");
-            }
-
-            var remaining = dayOfYear;
-            for (var month = 1; month <= months.Count; month++)
-            {
-                var daysInMonth = GetDaysInMonth(month, year);
-                if (remaining <= daysInMonth)
-                {
-                    return new GameDate(year, month, remaining);
-                }
-
-                remaining -= daysInMonth;
-            }
-
-            throw new InvalidOperationException("Unable to resolve date from day of year.");
+            return GetDateFromDayOfYearValidated(year, dayOfYear);
         }
 
         /// <summary>
@@ -338,8 +300,10 @@ namespace Isusov.Time.Calendar
         /// <returns>The zero-based serial day value.</returns>
         public long GetSerialDay(GameDate date)
         {
-            EnsureValidGameDate(date);
-            return GetDaysBeforeYear(date.Year) + GetDayOfYear(date) - 1L;
+            ValidateOrThrow();
+            EnsureValidGameDateValidated(date);
+
+            return GetDaysBeforeYear(date.Year) + GetDayOfYearValidated(date) - 1L;
         }
 
         /// <summary>
@@ -381,8 +345,8 @@ namespace Isusov.Time.Calendar
             }
 
             var year = low;
-            var dayOfYear = (int)(serialDay - GetDaysBeforeYear(year)) + 1;
-            return GetDateFromDayOfYear(year, dayOfYear);
+            var resolvedDayOfYear = (int)(serialDay - GetDaysBeforeYear(year)) + 1;
+            return GetDateFromDayOfYearValidated(year, resolvedDayOfYear);
         }
 
         /// <summary>
@@ -395,10 +359,138 @@ namespace Isusov.Time.Calendar
         /// </returns>
         public long GetDaysBetween(GameDate startInclusive, GameDate endInclusive)
         {
-            EnsureValidGameDate(startInclusive);
-            EnsureValidGameDate(endInclusive);
+            ValidateOrThrow();
+            EnsureValidGameDateValidated(startInclusive);
+            EnsureValidGameDateValidated(endInclusive);
 
-            return GetSerialDay(endInclusive) - GetSerialDay(startInclusive);
+            return GetSerialDayValidated(endInclusive) - GetSerialDayValidated(startInclusive);
+        }
+
+        private int GetDaysInMonthValidated(int monthIndex, int year)
+        {
+            var monthDays = months[monthIndex - 1].Days;
+            if (leapYearDayDelta > 0 && monthIndex == leapYearMonthIndex && IsLeapYear(year))
+            {
+                monthDays += leapYearDayDelta;
+            }
+
+            return monthDays;
+        }
+
+        private int GetMaximumDaysInMonthValidated(int monthIndex)
+        {
+            var commonDays = months[monthIndex - 1].Days;
+            if (leapYearDayDelta > 0 && monthIndex == leapYearMonthIndex)
+            {
+                return commonDays + leapYearDayDelta;
+            }
+
+            return commonDays;
+        }
+
+        private int GetDaysInYearValidated(int year)
+        {
+            var days = DaysPerCommonYear;
+            if (leapYearDayDelta > 0 && IsLeapYear(year))
+            {
+                days += leapYearDayDelta;
+            }
+
+            return days;
+        }
+
+        private int GetDayOfYearValidated(GameDate date)
+        {
+            var dayOfYear = 0;
+            for (var month = 1; month < date.MonthIndex; month++)
+            {
+                dayOfYear += GetDaysInMonthValidated(month, date.Year);
+            }
+
+            dayOfYear += date.Day;
+            return dayOfYear;
+        }
+
+        private GameDate GetDateFromDayOfYearValidated(int year, int dayOfYear)
+        {
+            if (year <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(year), year, "Year must be greater than zero.");
+            }
+
+            var daysInYear = GetDaysInYearValidated(year);
+            if (dayOfYear <= 0 || dayOfYear > daysInYear)
+            {
+                throw new ArgumentOutOfRangeException(nameof(dayOfYear), dayOfYear, $"Day of year must be between 1 and {daysInYear}.");
+            }
+
+            var remaining = dayOfYear;
+            for (var month = 1; month <= months.Count; month++)
+            {
+                var daysInMonth = GetDaysInMonthValidated(month, year);
+                if (remaining <= daysInMonth)
+                {
+                    return new GameDate(year, month, remaining);
+                }
+
+                remaining -= daysInMonth;
+            }
+
+            throw new InvalidOperationException("Unable to resolve date from day of year.");
+        }
+
+        private long GetSerialDayValidated(GameDate date)
+        {
+            return GetDaysBeforeYear(date.Year) + GetDayOfYearValidated(date) - 1L;
+        }
+
+        private bool TryValidateGameDateValidated(GameDate date, out string error)
+        {
+            if (date.Year <= 0)
+            {
+                error = "GameDate.Year must be greater than zero.";
+                return false;
+            }
+
+            if (date.MonthIndex <= 0 || date.MonthIndex > months.Count)
+            {
+                error = "GameDate.MonthIndex is outside the valid calendar range.";
+                return false;
+            }
+
+            var maxDay = GetDaysInMonthValidated(date.MonthIndex, date.Year);
+            if (date.Day <= 0 || date.Day > maxDay)
+            {
+                error = $"GameDate.Day must be between 1 and {maxDay} for {date.Year:D4}-{date.MonthIndex:D2}.";
+                return false;
+            }
+
+            error = null;
+            return true;
+        }
+
+        private void EnsureValidGameDateValidated(GameDate date)
+        {
+            if (!TryValidateGameDateValidated(date, out var error))
+            {
+                throw new ArgumentException(error, nameof(date));
+            }
+        }
+
+        private void ValidateMonthIndex(int monthIndex)
+        {
+            if (monthIndex <= 0 || monthIndex > months.Count)
+            {
+                throw new ArgumentOutOfRangeException(nameof(monthIndex), monthIndex, "Month index is outside the calendar range.");
+            }
+        }
+
+        private static void ValidateYear(int year)
+        {
+            if (year <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(year), year, "Year must be greater than zero.");
+            }
         }
 
         private long GetDaysBeforeYear(int year)

@@ -1,169 +1,96 @@
->>>
-**_Package Documentation Template_**
+# Game Time
 
-Use this template to create preliminary, high-level documentation meant to introduce users to the feature and the sample files included in this package. When writing your documentation, do the following:
+The `Game Time` package provides deterministic in-game time for Unity projects that need more than a simple real-time clock. Use it to drive authored calendars, in-game dates, seasons, and scheduled simulation events from a single authoritative runtime service.
 
-1. Follow instructions in blockquotes.
+The package is suitable for farming games, colony sims, strategy games, survival loops, or any project where gameplay depends on exact day, month, year, or season transitions.
 
-2. Replace angle brackets with the appropriate text. For example, replace "&lt;package name&gt;" with the official name of the package.
- 
-3. Delete sections that do not apply to your package. For example, a package containing only sample files does not have a "Using &lt;package_name&gt;" section, so this section can be removed.
- 
-4. After documentation is completed, make sure you delete all instructions and examples in blockquotes including this preamble and its title:
+# Installing Game Time
 
-    ```
-    >>>
-    Delete all of the text between pairs of blockquote markdown.
-    >>>
-    ```
->>>
+Install the package with the Unity Package Manager by using the Git URL or a package dependency entry, as described in the [Package Manager documentation](https://docs.unity3d.com/Manual/upm-ui-giturl.html).
 
-# About &lt;package name&gt;
+Git URL:
 
->>>
-Name the heading of the first topic after the **displayName** of the package as it appears in the package manifest.
+`https://github.com/veraluxmusic/Isusov.Time.git`
 
-This first topic includes a brief, high-level explanation of the package and, if applicable, provides links to Unity Manual topics.
+No additional packages are required.
 
-There are two types of packages:
+<a name="UsingGameTime"></a>
+# Using Game Time
 
- - Packages that include features that augment the Unity Editor or Runtime.
- - Packages that include sample files.
+## Recommended setup
 
-Choose one of the following introductory paragraphs that best fits the package:
->>>
+1. Create a `WorldTimeConfig` asset.
+2. Configure the calendar, starting date, tick pacing, and optional season profile.
+3. Add `WorldTimeService` to a scene object that acts as the authoritative time owner.
+4. Assign the configuration asset to the component.
+5. Either leave `Auto Initialize` enabled or call `TryInitialize(out errorMessage)` during your scene bootstrap.
 
-Use the &lt;package name&gt; package to &lt;list of the main uses for the package&gt;. For example, use &lt;package name&gt; to create/generate/extend/capture &lt;mention major use case, or a good example of what the package can be used for&gt;. The &lt;package name&gt; package also includes &lt;other relevant features or uses&gt;.
+`TryInitialize` is recommended for gameplay bootstrap code because it lets a scene fail gracefully when setup is incomplete. The `Initialize` method still throws for explicit fail-fast workflows.
 
-> *or*
+The inspectors for `WorldTimeConfig` and `WorldTimeService` surface validation status directly in the Unity Editor so authoring mistakes are visible before entering play mode.
 
-The &lt;package name&gt; package includes examples of &lt;name of asset type, model, prefabs, and/or other GameObjects in the package&gt;. For more information, see &lt;xref to topic in the Unity Manual&gt;.
+## Core runtime concepts
 
->>>
-**_Examples:_** 
+- `GameTick` is the absolute simulation timeline.
+- `GameDate` is the resolved calendar date.
+- `SimulationClock` advances the timeline from real elapsed time.
+- `TimeMapping` converts ticks into day indices, dates, and date start ticks.
+- `SimulationScheduler` runs callbacks when specific ticks become due.
+- `WorldTimeService` is the Unity-facing composition root.
 
-Here are some examples for reference only. Do not include these in the final documentation file:
+## Typical workflow
 
-*Use the Unity Recorder package to capture and save in-game data. For example, use Unity Recorder to record an mp4 file during a game session. The Unity Recorder package also includes an interface for setting-up and triggering recording sessions.*
+### Read the current world time
 
-*The Timeline Examples package includes examples of Timeline assets, Timeline Instances, animation, GameObjects, and scripts that illustrate how to use Unity's Timeline. For more information, see [ Unity's Timeline](https://docs.unity3d.com/Manual/TimelineSection.html) in the [Unity Manual](https://docs.unity3d.com). For licensing and usage, see Package Licensing.*
->>>
+Use `CurrentTick`, `CurrentDate`, `CurrentSeason`, or `CurrentGameTime` when you need a snapshot of the current simulation state.
 
-# Installing &lt;package name&gt;
->>>
-Begin this section with a cross-reference to the official Unity Manual topic on how to install packages. If the package requires special installation instructions, include these steps in this section.
->>>
+### React to time transitions
 
-To install this package, follow the instructions in the [Package Manager documentation](https://docs.unity3d.com/Packages/com.unity.package-manager-ui@latest/index.html). 
+Subscribe to `DayChanged`, `MonthChanged`, `YearChanged`, `SeasonChanged`, or `TickAdvanced` to drive gameplay systems without per-frame polling.
 
->>>
-For some packages, there may be additional steps to complete the setup. You can add those here.
->>>
+Subscribe in `OnEnable` and unsubscribe in `OnDisable` so listeners follow normal Unity lifecycle rules.
 
-In addition, you need to install the following resources:
+### Schedule gameplay work
 
- - &lt;name of resource&gt;: To install, open *Window > &lt;name of menu item&gt;*. The resource appears &lt;at this location&gt;.
- - &lt;name of sample&gt;: To install, open *Window > &lt;name of menu item&gt;*. The new sample folder appears &lt;at this location&gt;.
+Use `ScheduleAt` for absolute target ticks and `ScheduleAfter` for relative delays. Use `CancelScheduledEvent`, `PendingScheduledEventCount`, and `IsScheduledEventPending` to manage or inspect scheduled work.
 
+### Save and load
 
-<a name="UsingPackageName"></a>
-# Using &lt;package name&gt;
->>>
-The contents of this section depends on the type of package.
+Use `CreateStateSnapshot()` to capture the current tick, speed, and pause state. Restore those values with `RestoreState(state)` after reconstructing the same authored configuration.
 
-For packages that augment the Unity Editor with additional features, this section should include workflow and/or reference documentation:
+`RestoreState` clears pending scheduled callbacks because callback delegates are not serialized as part of `WorldTimeState`.
 
-* At a minimum, this section should include reference documentation that describes the windows, editors, and properties that the package adds to Unity. This reference documentation should include screen grabs (see how to add screens below), a list of settings, an explanation of what each setting does, and the default values of each setting.
-* Ideally, this section should also include a workflow: a list of steps that the user can easily follow that demonstrates how to use the feature. This list of steps should include screen grabs (see how to add screens below) to better describe how to use the feature.
+## Performance notes
 
-For packages that include sample files, this section may include detailed information on how the user can use these sample files in their projects and scenes. However, workflow diagrams or illustrations could be included if deemed appropriate.
-
-## How to add images
-
-*(This section is for reference. Do not include in the final documentation file)* 
-
-If the [Using &lt;package name&gt;](#UsingPackageName) section includes screen grabs or diagrams, a link to the image must be added to this MD file, before or after the paragraph with the instruction or description that references the image. In addition, a caption should be added to the image link that includes the name of the screen or diagram. All images must be PNG files with underscores for spaces. No animated GIFs.
-
-An example is included below:
-
-![A cinematic in the Timeline Editor window.](images/example.png)
-
-Notice that the example screen shot is included in the images folder. All screen grabs and/or diagrams must be added and referenced from the images folder.
-
-For more on the Unity documentation standards for creating and adding screen grabs, see this confluence page: https://confluence.hq.unity3d.com/pages/viewpage.action?pageId=13500715
->>>
-
-
+- Tick advancement is deterministic and frame-rate independent.
+- `WorldTimeService` emits one event per crossed boundary, so large fast-forwards scale with the number of crossed days.
+- `SimulationScheduler` executes due work in target-tick order.
+- Prefer the event model over repeated polling in `Update` for gameplay systems.
 
 # Technical details
+
 ## Requirements
->>>
-This subtopic includes a bullet list with the compatible versions of Unity. This subtopic may also include additional requirements or recommendations for 3rd party software or hardware. An example includes a dependency on other packages. If you need to include references to non-Unity products, make sure you refer to these products correctly and that all references include the proper trademarks (tm or r)
->>>
 
-This version of &lt;package name&gt; is compatible with the following versions of the Unity Editor:
-
-* 2018.1 and later (recommended)
-
-To use this package, you must have the following 3rd party products:
-
-* &lt;product name and version with trademark or registered trademark.&gt;
-* &lt;product name and version with trademark or registered trademark.&gt;
-* &lt;product name and version with trademark or registered trademark.&gt;
+- Unity 6 or newer
 
 ## Known limitations
->>>
-This section lists the known limitations with this version of the package. If there are no known limitations, or if the limitations are trivial, exclude this section. An example is provided.
->>>
 
-&lt;package name&gt; version &lt;package version&gt; includes the following known limitations:
-
-* &lt;brief one-line description of first limitation.&gt;
-* &lt;brief one-line description of second limitation.&gt;
-* &lt;and so on&gt;
-
->>>
-*Example (For reference. Do not include in the final documentation file):*
-
-The Unity Recorder version 1.0 has the following limitations:*
-
-* The Unity Recorder does not support sound.
-* The Recorder window and Recorder properties are not available in standalone players.
-* MP4 encoding is only available on Windows.
->>>
+- Scheduled callbacks are not part of save-state snapshots and must be recreated after loading.
+- Large single-frame time jumps emit each intermediate day transition in sequence, which is correct but can be expensive if abused.
 
 ## Package contents
->>>
-This section includes the location of important files you want the user to know about. For example, if this is a sample package containing textures, models, and materials separated by sample group, you may want to provide the folder location of each group.
->>>
 
-The following table indicates the &lt;describe the breakdown you used here&gt;:
-
-|Location|Description|
-|---|---|
-|`<folder>`|Contains &lt;describe what the folder contains&gt;.|
-|`<file>`|Contains &lt;describe what the file represents or implements&gt;.|
-
->>>
-*Example (For reference. Do not include in the final documentation file):*
-
-The following table indicates the root folder of each type of sample in this package. Each sample's root folder contains its own Materials, Models, or Textures folders:
-
-|Folder Location|Description|
-|---|---|
-|`WoodenCrate_Orange`|Root folder containing the assets for the orange crates.|
-|`WoodenCrate_Mahogany`|Root folder containing the assets for the mahogany crates.|
-|`WoodenCrate_Shared`|Root folder containing any material assets shared by all crates.|
->>>
+| Location              | Description                                                                    |
+| --------------------- | ------------------------------------------------------------------------------ |
+| `Runtime/Calendar/`   | Calendar definitions, date value types, and leap-year rules.                   |
+| `Runtime/Core/`       | Core simulation primitives such as ticks, clock advancement, and time mapping. |
+| `Runtime/Seasons/`    | Season domain types and season resolution logic.                               |
+| `Runtime/Scheduling/` | Deterministic tick-based scheduling primitives.                                |
+| `Runtime/Services/`   | Unity-facing service API, events, and runtime state snapshot support.          |
+| `Tests/Runtime/`      | Runtime regression tests for calendar mapping and world time behavior.         |
 
 ## Document revision history
->>>
-This section includes the revision history of the document. The revision history tracks when a document is created, edited, and updated. If you create or update a document, you must add a new row describing the revision.  The Documentation Team also uses this table to track when a document is edited and its editing level. An example is provided:
- 
-|Date|Reason|
-|---|---|
-|Sept 12, 2017|Unedited. Published to package.|
-|Sept 10, 2017|Document updated for package version 1.1.<br>New features: <li>audio support for capturing MP4s.<li>Instructions on saving Recorder prefabs|
-|Sept 5, 2017|Limited edit by Documentation Team. Published to package.|
-|Aug 25, 2017|Document created. Matches package version 1.0.|
->>>
+
+| Date       | Reason                                                                                          |
+| ---------- | ----------------------------------------------------------------------------------------------- |
+| 2026-03-15 | Documentation rewritten from template placeholder to package-specific setup and usage guidance. |

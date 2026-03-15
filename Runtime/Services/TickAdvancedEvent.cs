@@ -1,4 +1,4 @@
-using Isusov.Time.Config;
+using Isusov.Time.Core;
 using System;
 
 namespace Isusov.Time.Services

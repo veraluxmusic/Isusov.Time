@@ -1,5 +1,5 @@
 using System;
-using System.Linq;
+using System.Collections.Generic;
 using Isusov.Time.Calendar;
 
 namespace Isusov.Time.Seasons
@@ -28,7 +28,22 @@ namespace Isusov.Time.Seasons
     /// </remarks>
     public sealed class SeasonResolver : ISeasonResolver
     {
+        private readonly struct ResolvedSeasonBoundary
+        {
+            public ResolvedSeasonBoundary(int boundaryDayOfYear, Season season)
+            {
+                BoundaryDayOfYear = boundaryDayOfYear;
+                Season = season;
+            }
+
+            public int BoundaryDayOfYear { get; }
+
+            public Season Season { get; }
+        }
+
         private readonly SeasonProfile seasonProfile;
+        private readonly HashSet<CalendarDefinition> validatedCalendars = new();
+        private readonly Dictionary<CalendarDefinition, Dictionary<int, ResolvedSeasonBoundary[]>> boundariesByCalendarAndYear = new();
 
         /// <summary>
         /// Initializes a new instance of the <see cref="SeasonResolver"/> class.
@@ -69,7 +84,6 @@ namespace Isusov.Time.Seasons
                 throw new ArgumentNullException(nameof(calendarDefinition));
             }
 
-            calendarDefinition.ValidateOrThrow();
             calendarDefinition.EnsureValidGameDate(date);
 
             if (seasonProfile == null || seasonProfile.Definitions.Count == 0)
@@ -77,27 +91,68 @@ namespace Isusov.Time.Seasons
                 return Season.None;
             }
 
-            seasonProfile.ValidateOrThrow(calendarDefinition);
+            EnsureValidated(calendarDefinition);
 
             var currentDayOfYear = calendarDefinition.GetDayOfYear(date);
-            var orderedDefinitions = seasonProfile
-                .GetOrderedDefinitions(calendarDefinition, date.Year)
-                .ToArray();
+            var orderedBoundaries = GetOrderedBoundaries(calendarDefinition, date.Year);
+            var selectedSeason = orderedBoundaries[orderedBoundaries.Length - 1].Season;
 
-            SeasonDefinition selectedDefinition = null;
-
-            for (var i = 0; i < orderedDefinitions.Length; i++)
+            for (var i = 0; i < orderedBoundaries.Length; i++)
             {
-                var boundaryDay = orderedDefinitions[i].GetStartDayOfYear(calendarDefinition, date.Year);
-                if (boundaryDay > currentDayOfYear)
+                if (orderedBoundaries[i].BoundaryDayOfYear > currentDayOfYear)
                 {
                     break;
                 }
 
-                selectedDefinition = orderedDefinitions[i];
+                selectedSeason = orderedBoundaries[i].Season;
             }
 
-            return selectedDefinition?.Season ?? orderedDefinitions[orderedDefinitions.Length - 1].Season;
+            return selectedSeason;
+        }
+
+        private void EnsureValidated(CalendarDefinition calendarDefinition)
+        {
+            if (validatedCalendars.Contains(calendarDefinition))
+            {
+                return;
+            }
+
+            seasonProfile.ValidateOrThrow(calendarDefinition);
+            validatedCalendars.Add(calendarDefinition);
+        }
+
+        private ResolvedSeasonBoundary[] GetOrderedBoundaries(CalendarDefinition calendarDefinition, int year)
+        {
+            if (!boundariesByCalendarAndYear.TryGetValue(calendarDefinition, out var yearMap))
+            {
+                yearMap = new Dictionary<int, ResolvedSeasonBoundary[]>();
+                boundariesByCalendarAndYear.Add(calendarDefinition, yearMap);
+            }
+
+            if (!yearMap.TryGetValue(year, out var boundaries))
+            {
+                boundaries = BuildOrderedBoundaries(calendarDefinition, year);
+                yearMap.Add(year, boundaries);
+            }
+
+            return boundaries;
+        }
+
+        private ResolvedSeasonBoundary[] BuildOrderedBoundaries(CalendarDefinition calendarDefinition, int year)
+        {
+            var definitionCount = seasonProfile.Definitions.Count;
+            var boundaries = new ResolvedSeasonBoundary[definitionCount];
+
+            for (var i = 0; i < definitionCount; i++)
+            {
+                var definition = seasonProfile.Definitions[i];
+                boundaries[i] = new ResolvedSeasonBoundary(
+                    definition.GetStartDayOfYear(calendarDefinition, year),
+                    definition.Season);
+            }
+
+            Array.Sort(boundaries, (left, right) => left.BoundaryDayOfYear.CompareTo(right.BoundaryDayOfYear));
+            return boundaries;
         }
     }
 }
